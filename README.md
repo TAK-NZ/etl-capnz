@@ -2,6 +2,14 @@
 
 <p align='center'>Bring CAP-NZ (Common Alerting Protocol - New Zealand) data from RSS and Atom feeds</p>
 
+## Data Source
+
+| Alerting authority | CAP feed | Content |
+|---|---|---|
+| GNS Science | https://api.geonet.org.nz/cap/1.2/GPA1.0/feed/atom1.0/quake | Earthquake |
+| MetService | https://alerts.metservice.com/cap/rss | Severe weather |
+| NEMA, CDEM Groups, Ministry of Health, New Zealand Police, Ministry for Primary Industries, Fire and Emergency New Zealand | https://alerthub.civildefence.govt.nz/rss/pwp or https://alerthub.civildefence.govt.nz/atom/pwp | Emergency Mobile Alert |
+
 ## Deployment
 
 Deployment into the CloudTAK environment for ETL tasks is done via automatic releases to the TAK.NZ AWS environment.
