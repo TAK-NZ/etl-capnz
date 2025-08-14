@@ -11,7 +11,7 @@
         "test": "exit 0"
     },
     "author": "Christian Elsen <chris@elsen.nz>",
-    "license": "MIT",
+    "license": "AGPL-3.0-only",
     "devDependencies": {
         "@types/jsonwebtoken": "^9.0.1",
         "@types/object-hash": "^3.0.6",
