@@ -55,6 +55,7 @@ interface CAPAlert {
         issuer?: string;
         subject?: string;
         validUntil?: string;
+        fingerprint?: string;
     };
 }
 
@@ -291,6 +292,12 @@ export default class Task extends ETL {
                     const cleanCert = certSection.replace(/&#13;/g, '').replace(/\s/g, '');
                     const certData = atob(cleanCert);
                     
+                    // Generate SHA-1 fingerprint
+                    const crypto = require('crypto');
+                    const sha1Hash = crypto.createHash('sha1');
+                    sha1Hash.update(cleanCert, 'base64');
+                    const fingerprint = sha1Hash.digest('hex').toUpperCase().match(/.{2}/g)?.join(':');
+                    
                     // Extract certificate info using more flexible patterns
                     const cnMatch = certData.match(/CN=([^,\x00-\x1f]+)/);
                     const oMatch = certData.match(/O=([^,\x00-\x1f]+)/);
@@ -300,14 +307,16 @@ export default class Task extends ETL {
                     signature = {
                         issuer: cnMatch ? cnMatch[1].trim() : 'MetService',
                         subject: oMatch ? oMatch[1].trim() : 'METEOROLOGICAL SERVICE OF NEW ZEALAND LIMITED',
-                        validUntil: validMatch ? `20${validMatch[1]}-${validMatch[2]}-${validMatch[3]}` : '2025-10-23'
+                        validUntil: validMatch ? `20${validMatch[1]}-${validMatch[2]}-${validMatch[3]}` : '2025-10-23',
+                        fingerprint: fingerprint || 'Unknown'
                     };
                 } catch (error) {
                     // Fallback signature info if parsing fails
                     signature = {
                         issuer: 'cap.metservice.com',
                         subject: 'METEOROLOGICAL SERVICE OF NEW ZEALAND LIMITED',
-                        validUntil: '2025-10-23'
+                        validUntil: '2025-10-23',
+                        fingerprint: 'Unknown'
                     };
                 }
             }
@@ -505,7 +514,8 @@ export default class Task extends ETL {
                             ...(alert.signature ? [
                                 'Cert: ' + (alert.signature.subject || 'Unknown'),
                                 'Issuer: ' + (alert.signature.issuer || 'Unknown'),
-                                'Valid Until: ' + (alert.signature.validUntil || 'Unknown')
+                                'Valid Until: ' + (alert.signature.validUntil || 'Unknown'),
+                                'Fingerprint: ' + (alert.signature.fingerprint || 'Unknown')
                             ] : [])
                         ].filter(r => r.trim()).join('\n'),
                         ...(alert.info.web ? {
