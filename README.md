@@ -10,6 +10,10 @@
 | MetService | https://alerts.metservice.com/cap/rss | Severe weather |
 | NEMA, CDEM Groups, Ministry of Health, New Zealand Police, Ministry for Primary Industries, Fire and Emergency New Zealand | https://alerthub.civildefence.govt.nz/rss/pwp or https://alerthub.civildefence.govt.nz/atom/pwp | Emergency Mobile Alert |
 
+## Example Data
+
+![MetService weather alert](docs/etl-capnz.png)
+
 ## Deployment
 
 Deployment into the CloudTAK environment for ETL tasks is done via automatic releases to the TAK.NZ AWS environment.
