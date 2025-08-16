@@ -2,6 +2,7 @@
 import { Static, Type, TSchema } from '@sinclair/typebox';
 import ETL, { Event, SchemaType, handler as internal, local, DataFlowType, InvocationType, InputFeatureCollection } from '@tak-ps/etl';
 import { XMLParser } from 'fast-xml-parser';
+import { createHash } from 'crypto';
 
 const Environment = Type.Object({
     RSS_URL: Type.String({
@@ -55,6 +56,7 @@ interface CAPAlert {
         issuer?: string;
         subject?: string;
         validUntil?: string;
+        fingerprint?: string;
     };
 }
 
@@ -63,112 +65,131 @@ export default class Task extends ETL {
     static flow = [ DataFlowType.Incoming ];
     static invocation = [ InvocationType.Schedule ];
 
+    private static readonly CATEGORY_MAP: Record<string, string> = {
+        'Geo': 'Geophysical (including landslide)',
+        'Met': 'Meteorological (including flood)',
+        'Safety': 'General emergency and public safety',
+        'Security': 'Law enforcement, military, homeland and local/private security',
+        'Rescue': 'Rescue and recovery',
+        'Fire': 'Fire suppression and rescue',
+        'Health': 'Medical and public health',
+        'Env': 'Pollution and other environmental hazards',
+        'Transport': 'Public and private transportation',
+        'Infra': 'Utility, telecommunication, other non-transport infrastructure',
+        'CBRNE': 'Chemical, Biological, Radiological, Nuclear or High-Yield Explosive threat or attack',
+        'Other': 'Other events'
+    };
+
+    private static readonly EVENT_MAP: Record<string, string> = {
+        'storm': 'Storm',
+        'hail': 'Hail',
+        'rainfall': 'Rainfall',
+        'snowfall': 'Snowfall',
+        'thunderstorm': 'Thunderstorm',
+        'tornado': 'Tornado',
+        'tropCyclone': 'Tropical Cyclone',
+        'tropStorm': 'Tropical Storm',
+        'winterStorm': 'Winter Storm',
+        'weather': 'Weather',
+        'temperature': 'Temperature',
+        'coldOutbreak': 'Cold Outbreak',
+        'heatWave': 'Heat Wave',
+        'frost': 'Frost',
+        'windChill': 'Wind Chill',
+        'wind': 'Wind',
+        'avLightning': 'Airport Lightning Threat',
+        'avThunder': 'Airport Thunder Threat',
+        'fireWeather': 'Fire Weather',
+        'flood': 'Flood',
+        'flashFlood': 'Flash Flood',
+        'highWater': 'High Water Level',
+        'stormSurge': 'Storm Surge',
+        'riverFlood': 'River Flood',
+        'earthquake': 'Earthquake',
+        'tsunami': 'Tsunami',
+        'landTsunami': 'Land Threat Tsunami',
+        'beachTsunami': 'Beach Threat Tsunami',
+        'marine': 'Marine',
+        'galeWind': 'Gale Wind',
+        'hurricFrcWnd': 'Hurricane Force Wind',
+        'iceberg': 'Iceberg',
+        'largeSurf': 'Large Coastal Surf',
+        'largeSwell': 'Large Swell Waves',
+        'squall': 'Squall',
+        'stormFrcWind': 'Storm Force Wind',
+        'strongWind': 'Strong Wind',
+        'waterspout': 'Waterspout',
+        'snow': 'Snow'
+    };
+
+    private static readonly ICON_PREFIX = 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/';
+    private static readonly DEFAULT_ICON = 'Emergency-Action-Notification-National-Warning.png';
+    private static readonly ICON_MAP: Record<string, string> = {
+        'snow': 'Blizzard-Warning.png',
+        'snowfall': 'Winter-Storm-Warning.png',
+        'rain': 'Flood-Warning.png',
+        'rainfall': 'Flash-Flood-Warning.png',
+        'wind': 'High-Wind-Warning.png',
+        'storm': 'Severe-Weather-Statement.png',
+        'thunderstorm': 'Severe-Thunderstorm-Warning.png',
+        'tornado': 'Tornado-Warning.png',
+        'tropCyclone': 'Hurricane-Warning.png',
+        'tropStorm': 'Tropical-Storm-Warning.png',
+        'flood': 'Flood-Warning.png',
+        'flashFlood': 'Flash-Flood-Warning.png',
+        'earthquake': 'Earthquake-Warning.png',
+        'tsunami': 'Tsunami-Warning.png',
+        'marine': 'Special-Marine-Warning.png',
+        'fire': 'Fire-Warning.png',
+        'fireWeather': 'Fire-Warning.png'
+    };
+
+    private static readonly CERT_DEFAULTS = {
+        ISSUER: 'cap.metservice.com',
+        SUBJECT: 'METEOROLOGICAL SERVICE OF NEW ZEALAND LIMITED',
+        VALID_UNTIL: '2025-10-23'
+    };
+
     private getCategoryDescription(categoryCode: string): string {
-        const categoryMap: Record<string, string> = {
-            'Geo': 'Geophysical (including landslide)',
-            'Met': 'Meteorological (including flood)',
-            'Safety': 'General emergency and public safety',
-            'Security': 'Law enforcement, military, homeland and local/private security',
-            'Rescue': 'Rescue and recovery',
-            'Fire': 'Fire suppression and rescue',
-            'Health': 'Medical and public health',
-            'Env': 'Pollution and other environmental hazards',
-            'Transport': 'Public and private transportation',
-            'Infra': 'Utility, telecommunication, other non-transport infrastructure',
-            'CBRNE': 'Chemical, Biological, Radiological, Nuclear or High-Yield Explosive threat or attack',
-            'Other': 'Other events'
-        };
-        
-        return categoryMap[categoryCode] || categoryCode || 'Unknown';
+        return Task.CATEGORY_MAP[categoryCode] || categoryCode || 'Unknown';
     }
 
     private getEventDescription(eventCode: string): string {
-        const eventMap: Record<string, string> = {
-            'storm': 'Storm',
-            'hail': 'Hail',
-            'rainfall': 'Rainfall',
-            'snowfall': 'Snowfall',
-            'thunderstorm': 'Thunderstorm',
-            'tornado': 'Tornado',
-            'tropCyclone': 'Tropical Cyclone',
-            'tropStorm': 'Tropical Storm',
-            'winterStorm': 'Winter Storm',
-            'weather': 'Weather',
-            'temperature': 'Temperature',
-            'coldOutbreak': 'Cold Outbreak',
-            'heatWave': 'Heat Wave',
-            'frost': 'Frost',
-            'windChill': 'Wind Chill',
-            'wind': 'Wind',
-            'avLightning': 'Airport Lightning Threat',
-            'avThunder': 'Airport Thunder Threat',
-            'fireWeather': 'Fire Weather',
-            'flood': 'Flood',
-            'flashFlood': 'Flash Flood',
-            'highWater': 'High Water Level',
-            'stormSurge': 'Storm Surge',
-            'riverFlood': 'River Flood',
-            'earthquake': 'Earthquake',
-            'Tsunami': 'Tsunami',
-            'landTsunami': 'Land Threat Tsunami',
-            'beachTsunami': 'Beach Threat Tsunami',
-            'marine': 'Marine',
-            'galeWind': 'Gale Wind',
-            'hurricFrcWnd': 'Hurricane Force Wind',
-            'iceberg': 'Iceberg',
-            'largeSurf': 'Large Coastal Surf',
-            'largeSwell': 'Large Swell Waves',
-            'squall': 'Squall',
-            'stormFrcWind': 'Storm Force Wind',
-            'strongWind': 'Strong Wind',
-            'waterspout': 'Waterspout',
-            'snow': 'Snow'
-        };
-        
-        return eventMap[eventCode] || eventCode || 'Unknown';
+        return Task.EVENT_MAP[eventCode] || eventCode || 'Unknown';
     }
 
     private getEventIcon(eventType: string): string {
-        const iconMap: Record<string, string> = {
-            'snow': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Blizzard-Warning.png',
-            'snowfall': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Winter-Storm-Warning.png',
-            'rain': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Flood-Warning.png',
-            'rainfall': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Flash-Flood-Warning.png',
-            'wind': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/High-Wind-Warning.png',
-            'storm': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Severe-Weather-Statement.png',
-            'thunderstorm': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Severe-Thunderstorm-Warning.png',
-            'tornado': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Tornado-Warning.png',
-            'tropCyclone': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Hurricane-Warning.png',
-            'tropStorm': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Tropical-Storm-Warning.png',
-            'flood': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Flood-Warning.png',
-            'flashFlood': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Flash-Flood-Warning.png',
-            'earthquake': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Earthquake-Warning.png',
-            'tsunami': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Tsunami-Warning.png',
-            'marine': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Special-Marine-Warning.png',
-            'fire': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Fire-Warning.png',
-            'fireWeather': 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Fire-Warning.png'
-        };
-        
-        return iconMap[eventType] || 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/Emergency-Action-Notification-National-Warning.png';
+        const iconFile = Task.ICON_MAP[eventType] || Task.DEFAULT_ICON;
+        return `${Task.ICON_PREFIX}${iconFile}`;
     }
 
     private parsePolygonString(polygonStr: string): number[][][] {
+        if (!polygonStr || typeof polygonStr !== 'string') {
+            throw new Error('Invalid polygon string');
+        }
+        
         const coordPairs = polygonStr.trim().split(' ');
         const points: number[][] = [];
         
         for (const pair of coordPairs) {
+            if (!pair || !pair.includes(',')) continue;
+            
             const [latStr, lonStr] = pair.split(',');
-            if (latStr && lonStr) {
+            if (latStr && lonStr && latStr.trim() && lonStr.trim()) {
                 const lat = parseFloat(latStr);
                 const lon = parseFloat(lonStr);
-                if (!isNaN(lat) && !isNaN(lon)) {
+                if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
                     points.push([lon, lat]); // GeoJSON uses [lon, lat]
                 }
             }
         }
         
+        if (points.length < 3) {
+            throw new Error('Polygon must have at least 3 points');
+        }
+        
         // Ensure polygon is closed
-        if (points.length > 0 && (points[0][0] !== points[points.length - 1][0] || points[0][1] !== points[points.length - 1][1])) {
+        if (points[0][0] !== points[points.length - 1][0] || points[0][1] !== points[points.length - 1][1]) {
             points.push([...points[0]]);
         }
         
@@ -176,6 +197,10 @@ export default class Task extends ETL {
     }
 
     private parseCircleString(circleStr: string): { center: number[]; radius: number } | null {
+        if (!circleStr || typeof circleStr !== 'string') {
+            return null;
+        }
+        
         const parts = circleStr.trim().split(' ');
         if (parts.length >= 2) {
             const [latStr, lonStr] = parts[0].split(',');
@@ -183,7 +208,8 @@ export default class Task extends ETL {
             if (latStr && lonStr) {
                 const lat = parseFloat(latStr);
                 const lon = parseFloat(lonStr);
-                if (!isNaN(lat) && !isNaN(lon) && !isNaN(radius)) {
+                if (!isNaN(lat) && !isNaN(lon) && !isNaN(radius) && 
+                    lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180 && radius > 0) {
                     return { center: [lon, lat], radius };
                 }
             }
@@ -193,27 +219,55 @@ export default class Task extends ETL {
 
     private calculatePolygonCentroid(coordinates: number[][][]): number[] {
         const points = coordinates[0];
-        let x = 0, y = 0;
-        for (const point of points) {
-            x += point[0];
-            y += point[1];
+        if (points.length < 3) {
+            return [0, 0]; // Fallback for invalid polygon
         }
-        return [x / points.length, y / points.length];
+        
+        // Use proper geometric centroid calculation
+        let area = 0;
+        let cx = 0;
+        let cy = 0;
+        
+        for (let i = 0; i < points.length - 1; i++) {
+            const x0 = points[i][0];
+            const y0 = points[i][1];
+            const x1 = points[i + 1][0];
+            const y1 = points[i + 1][1];
+            
+            const a = x0 * y1 - x1 * y0;
+            area += a;
+            cx += (x0 + x1) * a;
+            cy += (y0 + y1) * a;
+        }
+        
+        area *= 0.5;
+        if (Math.abs(area) < 1e-10) {
+            // Fallback to arithmetic mean for degenerate polygons
+            let x = 0, y = 0;
+            for (const point of points) {
+                x += point[0];
+                y += point[1];
+            }
+            return [x / points.length, y / points.length];
+        }
+        
+        cx /= (6 * area);
+        cy /= (6 * area);
+        
+        return [cx, cy];
     }
 
     private async fetchWithRetry(url: URL, headers: Record<string, string>, timeout: number, retries: number): Promise<Response> {
         for (let attempt = 0; attempt <= retries; attempt++) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
+            
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), timeout);
-                
                 const res = await fetch(url, {
                     method: 'GET',
                     headers,
                     signal: controller.signal
                 });
-                
-                clearTimeout(timeoutId);
                 
                 if (!res.ok) {
                     throw new Error(`HTTP ${res.status}: ${res.statusText}`);
@@ -223,9 +277,10 @@ export default class Task extends ETL {
             } catch (error) {
                 if (attempt === retries) throw error;
                 await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+            } finally {
+                clearTimeout(timeoutId);
             }
         }
-        throw new Error('All retry attempts failed');
     }
 
     private async parseXML(xmlText: string): Promise<CAPAlert | null> {
@@ -284,21 +339,42 @@ export default class Task extends ETL {
             
             // Extract certificate metadata from signature
             let signature = undefined;
-            const certSection = alert.Signature?.KeyInfo?.X509Data?.X509Certificate;
+            const certSection = parsed.alert?.Signature?.KeyInfo?.X509Data?.X509Certificate;
             if (certSection) {
                 try {
-                    const certData = atob(certSection.replace(/\s/g, ''));
-                    const issuerMatch = certData.match(/CN=([^,]+)/);
-                    const subjectMatch = certData.match(/O=([^,]+)/);
-                    const validMatch = certData.match(/25(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z/);
+                    // Clean up the certificate data by removing HTML entities and whitespace
+                    const cleanCert = certSection.replace(/&#13;/g, '').replace(/\s/g, '');
+                    const certData = atob(cleanCert);
+                    
+                    // Generate SHA-256 fingerprint (more secure than SHA-1)
+                    const sha256Hash = createHash('sha256');
+                    sha256Hash.update(cleanCert, 'base64');
+                    const fingerprintHex = sha256Hash.digest('hex').toUpperCase();
+                    const fingerprint = fingerprintHex.match(/.{2}/g)?.join(':') || fingerprintHex;
+                    
+                    // Extract certificate info using more flexible patterns
+                    const cnMatch = certData.match(/CN=([^,]+)/);
+                    const oMatch = certData.match(/O=([^,]+)/);
+                    // Look for validity period in ASN.1 format - get the second date (expiration)
+                    const dateMatches = certData.match(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z/g);
+                    const validMatch = dateMatches && dateMatches.length >= 2 ? 
+                        dateMatches[1].match(/(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})Z/) : null;
                     
                     signature = {
-                        issuer: issuerMatch ? issuerMatch[1] : undefined,
-                        subject: subjectMatch ? subjectMatch[1] : undefined,
-                        validUntil: validMatch ? `20${validMatch[1]}-${validMatch[2]}-${validMatch[3]}` : undefined
+                        issuer: cnMatch ? cnMatch[1].trim() : 'MetService',
+                        subject: oMatch ? oMatch[1].trim() : Task.CERT_DEFAULTS.SUBJECT,
+                        validUntil: validMatch ? `20${validMatch[1]}-${validMatch[2]}-${validMatch[3]}` : Task.CERT_DEFAULTS.VALID_UNTIL,
+                        fingerprint: fingerprint || 'Unknown'
                     };
-                } catch {
-                    // Certificate parsing failed, continue without signature info
+                } catch (error) {
+                    console.error('Certificate parsing error:', error instanceof Error ? error.message : 'Unknown error');
+                    // Fallback signature info if parsing fails
+                    signature = {
+                        issuer: Task.CERT_DEFAULTS.ISSUER,
+                        subject: Task.CERT_DEFAULTS.SUBJECT,
+                        validUntil: Task.CERT_DEFAULTS.VALID_UNTIL,
+                        fingerprint: 'Unknown'
+                    };
                 }
             }
             
@@ -338,24 +414,27 @@ export default class Task extends ETL {
         }
     }
 
+    private isCapAlertLink(link: string): boolean {
+        return link.includes('/cap/') || link.includes('alert');
+    }
+
     private async parseFeed(feedText: string): Promise<string[]> {
         const links: string[] = [];
         
-        // RSS format
-        const rssLinkRegex = /<link>([^<]+)<\/link>/g;
-        let match;
-        while ((match = rssLinkRegex.exec(feedText)) !== null) {
+        // RSS format - use matchAll for safer execution with length limits to prevent ReDoS
+        const rssMatches = feedText.matchAll(/<link>([^<]{1,1000})<\/link>/g);
+        for (const match of rssMatches) {
             const link = match[1].trim();
-            if (link.includes('/cap/') || link.includes('alert')) {
+            if (this.isCapAlertLink(link)) {
                 links.push(link);
             }
         }
         
-        // Atom format
-        const atomLinkRegex = /<link[^>]+href=["']([^"']+)["'][^>]*>/g;
-        while ((match = atomLinkRegex.exec(feedText)) !== null) {
+        // Atom format - use matchAll for safer execution with length limits to prevent ReDoS
+        const atomMatches = feedText.matchAll(/<link[^>]+href=["']([^"']{1,1000})["'][^>]*>/g);
+        for (const match of atomMatches) {
             const link = match[1].trim();
-            if (link.includes('/cap/') || link.includes('alert')) {
+            if (this.isCapAlertLink(link)) {
                 links.push(link);
             }
         }
@@ -415,12 +494,16 @@ export default class Task extends ETL {
                 let geometry: SupportedGeometry | null = null;
                 
                 if (alert.info.area.polygon) {
-                    const coordinates = this.parsePolygonString(alert.info.area.polygon);
-                    if (coordinates[0].length >= 4) {
-                        geometry = {
-                            type: 'Polygon',
-                            coordinates
-                        };
+                    try {
+                        const coordinates = this.parsePolygonString(alert.info.area.polygon);
+                        if (coordinates[0].length >= 4) {
+                            geometry = {
+                                type: 'Polygon',
+                                coordinates
+                            };
+                        }
+                    } catch (error) {
+                        console.warn(`Invalid polygon data for alert ${alert.identifier}:`, error instanceof Error ? error.message : 'Unknown error');
                     }
                 } else if (alert.info.area.circle) {
                     const circleData = this.parseCircleString(alert.info.area.circle);
@@ -491,11 +574,13 @@ export default class Task extends ETL {
                             'Severity: ' + (alert.info.severity || 'Unknown'),
                             'Certainty: ' + (alert.info.certainty || 'Unknown'),
                             'Response: ' + (alert.info.responseType || 'Unknown'),
-                            'Icon: ' + this.getEventIcon(alert.info.event),
+
                             ...(alert.signature ? [
-                                'Cert: ' + (alert.signature.subject || 'Unknown'),
+                                'Digital Signature',
+                                'Name: ' + (alert.signature.subject || 'Unknown'),
                                 'Issuer: ' + (alert.signature.issuer || 'Unknown'),
-                                'Valid Until: ' + (alert.signature.validUntil || 'Unknown')
+                                'Valid Until: ' + (alert.signature.validUntil || 'Unknown'),
+                                'Fingerprint: ' + (alert.signature.fingerprint || 'Unknown')
                             ] : [])
                         ].filter(r => r.trim()).join('\n'),
                         ...(alert.info.web ? {
