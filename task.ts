@@ -615,10 +615,12 @@ export default class Task extends ETL {
                                     geometry: polygonGeometry
                                 };
                                 
+                                console.log(`Adding polygon feature: ${polygonId} - ${alert.info.headline}`);
                                 fc.features.push(polygonFeature);
                                 
                                 // Add center point with icon
                                 const centroid = this.calculatePolygonCentroid(coordinates);
+                                console.log(`Adding center point for ${polygonId} at [${centroid[0]}, ${centroid[1]}]`);
                                 const centerFeature = {
                                     id: `${polygonId}-center`,
                                     type: 'Feature' as const,
@@ -751,6 +753,7 @@ export default class Task extends ETL {
                     geometry
                 };
 
+                console.log(`Adding feature: ${alert.identifier} (${geometry.type}) - ${alert.info.headline}`);
                 fc.features.push(feature);
             } catch (error) {
                 console.error(`Error processing CAP alert ${alertUrl}:`, error);
