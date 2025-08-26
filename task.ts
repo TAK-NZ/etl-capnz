@@ -366,8 +366,23 @@ export default class Task extends ETL {
             let colorCode = null;
             if (info.parameter) {
                 const params = Array.isArray(info.parameter) ? info.parameter : [info.parameter];
-                const colorParam = params.find((p: { valueName: string; value: string }) => p.valueName === 'ColourCodeHex');
-                colorCode = colorParam?.value || null;
+                // Prioritize ColourCodeHex over ColourCode
+                const hexParam = params.find((p: { valueName: string; value: string }) => p.valueName === 'ColourCodeHex');
+                if (hexParam) {
+                    colorCode = hexParam.value;
+                } else {
+                    const colorParam = params.find((p: { valueName: string; value: string }) => p.valueName === 'ColourCode');
+                    if (colorParam) {
+                        const colorMap: Record<string, string> = {
+                            'Red': '#FF0000',
+                            'Orange': '#FF8918',
+                            'Yellow': '#FFFF00',
+                            'Green': '#00FF00',
+                            'Blue': '#0000FF'
+                        };
+                        colorCode = colorMap[colorParam.value] || null;
+                    }
+                }
             }
             
             // Extract certificate metadata from signature
@@ -602,14 +617,14 @@ export default class Task extends ETL {
                                                 remarks: 'CAP Alert Details'
                                             }]
                                         } : {}),
-                                        style: alert.info.colorCode ? {
+                                        ...(alert.info.colorCode ? {
                                             stroke: alert.info.colorCode,
                                             'stroke-opacity': 0.5019607843137255,
                                             'stroke-width': 3,
                                             'stroke-style': 'solid',
                                             'fill-opacity': 0.5019607843137255,
                                             fill: alert.info.colorCode
-                                        } : {},
+                                        } : {}),
                                         archived: false
                                     },
                                     geometry: polygonGeometry
