@@ -165,27 +165,58 @@ export default class Task extends ETL {
 
     private parsePolygonString(polygonStr: string): number[][][] {
         if (!polygonStr || typeof polygonStr !== 'string') {
-            throw new Error('Invalid polygon string');
+            throw new Error('Empty or invalid polygon string');
         }
         
-        const coordPairs = polygonStr.trim().split(' ');
+        const trimmed = polygonStr.trim();
+        if (!trimmed) {
+            throw new Error('Empty polygon string after trimming');
+        }
+        
+        const coordPairs = trimmed.split(/\s+/);
         const points: number[][] = [];
+        const invalidPairs: string[] = [];
         
         for (const pair of coordPairs) {
-            if (!pair || !pair.includes(',')) continue;
-            
-            const [latStr, lonStr] = pair.split(',');
-            if (latStr && lonStr && latStr.trim() && lonStr.trim()) {
-                const lat = parseFloat(latStr);
-                const lon = parseFloat(lonStr);
-                if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-                    points.push([lon, lat]); // GeoJSON uses [lon, lat]
-                }
+            if (!pair || !pair.includes(',')) {
+                if (pair) invalidPairs.push(pair);
+                continue;
             }
+            
+            const parts = pair.split(',');
+            if (parts.length !== 2) {
+                invalidPairs.push(pair);
+                continue;
+            }
+            
+            const [latStr, lonStr] = parts;
+            if (!latStr?.trim() || !lonStr?.trim()) {
+                invalidPairs.push(pair);
+                continue;
+            }
+            
+            const lat = parseFloat(latStr.trim());
+            const lon = parseFloat(lonStr.trim());
+            
+            if (isNaN(lat) || isNaN(lon)) {
+                invalidPairs.push(pair);
+                continue;
+            }
+            
+            if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+                invalidPairs.push(pair);
+                continue;
+            }
+            
+            points.push([lon, lat]); // GeoJSON uses [lon, lat]
+        }
+        
+        if (invalidPairs.length > 0) {
+            throw new Error(`Invalid coordinate pairs: ${invalidPairs.slice(0, 3).join(', ')}${invalidPairs.length > 3 ? '...' : ''}`);
         }
         
         if (points.length < 3) {
-            throw new Error('Polygon must have at least 3 points');
+            throw new Error(`Insufficient valid points: ${points.length} (minimum 3 required)`);
         }
         
         // Ensure polygon is closed
@@ -256,6 +287,8 @@ export default class Task extends ETL {
         
         return [cx, cy];
     }
+
+
 
     private async fetchWithRetry(url: URL, headers: Record<string, string>, timeout: number, retries: number): Promise<Response> {
         for (let attempt = 0; attempt <= retries; attempt++) {
@@ -495,13 +528,132 @@ export default class Task extends ETL {
                 
                 if (alert.info.area.polygon) {
                     try {
-                        const coordinates = this.parsePolygonString(alert.info.area.polygon);
-                        if (coordinates[0].length >= 4) {
-                            geometry = {
-                                type: 'Polygon',
-                                coordinates
-                            };
+                        // Handle both single polygon string and array of polygon strings
+                        const polygons = Array.isArray(alert.info.area.polygon) ? alert.info.area.polygon : [alert.info.area.polygon];
+                        
+                        // Process each polygon separately
+                        for (let i = 0; i < polygons.length; i++) {
+                            const coordinates = this.parsePolygonString(polygons[i]);
+                            
+                            if (coordinates[0].length >= 4) {
+                                const polygonGeometry = {
+                                    type: 'Polygon' as const,
+                                    coordinates
+                                };
+                                
+                                const polygonId = polygons.length > 1 ? `${alert.identifier}-${i}` : alert.identifier;
+                                
+                                const polygonFeature = {
+                                    id: polygonId,
+                                    type: 'Feature' as const,
+                                    properties: {
+                                        callsign: alert.info.headline || 'CAP Alert',
+                                        type: 'a-f-X-i',
+                                        time: new Date(alert.sent).toISOString(),
+                                        start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
+                                        stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
+                                        metadata: {
+                                            sender: alert.sender,
+                                            sent: alert.sent,
+                                            status: alert.status,
+                                            msgType: alert.msgType,
+                                            scope: alert.scope,
+                                            category: alert.info.category,
+                                            event: alert.info.event,
+                                            urgency: alert.info.urgency,
+                                            severity: alert.info.severity,
+                                            certainty: alert.info.certainty,
+                                            senderName: alert.info.senderName,
+                                            headline: alert.info.headline,
+                                            description: alert.info.description,
+                                            instruction: alert.info.instruction,
+                                            responseType: alert.info.responseType,
+                                            onset: alert.info.onset,
+                                            expires: alert.info.expires,
+                                            web: alert.info.web,
+                                            areaDesc: alert.info.area.areaDesc
+                                        },
+                                        remarks: [
+                                            'Description: ' + alert.info.description || '',
+                                            'Instruction: ' + alert.info.instruction || '',
+                                            'Category: ' + this.getCategoryDescription(alert.info.category),
+                                            'Event: ' + this.getEventDescription(alert.info.event),
+                                            'Urgency: ' + (alert.info.urgency || 'Unknown'),
+                                            'Severity: ' + (alert.info.severity || 'Unknown'),
+                                            'Certainty: ' + (alert.info.certainty || 'Unknown'),
+                                            'Response: ' + (alert.info.responseType || 'Unknown'),
+                                            ...(alert.info.onset ? ['Onset: ' + new Date(alert.info.onset).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' }) + ' NZT'] : []),
+                                            ...(alert.info.expires ? ['Expires: ' + new Date(alert.info.expires).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' }) + ' NZT'] : []),
+                                            ...(alert.signature ? [
+                                                '',
+                                                'Digital Signature',
+                                                'Name: ' + (alert.signature.subject || 'Unknown'),
+                                                'Issuer: ' + (alert.signature.issuer || 'Unknown'),
+                                                'Valid Until: ' + (alert.signature.validUntil || 'Unknown'),
+                                                'Fingerprint: ' + (alert.signature.fingerprint || 'Unknown')
+                                            ] : [])
+                                        ].filter(r => r.trim()).join('\n'),
+                                        ...(alert.info.web ? {
+                                            links: [{
+                                                uid: polygonId,
+                                                relation: 'r-u',
+                                                mime: 'text/html',
+                                                url: alert.info.web,
+                                                remarks: 'CAP Alert Details'
+                                            }]
+                                        } : {}),
+                                        style: alert.info.colorCode ? {
+                                            stroke: alert.info.colorCode,
+                                            'stroke-opacity': 0.5019607843137255,
+                                            'stroke-width': 3,
+                                            'stroke-style': 'solid',
+                                            'fill-opacity': 0.5019607843137255,
+                                            fill: alert.info.colorCode
+                                        } : {},
+                                        archived: false
+                                    },
+                                    geometry: polygonGeometry
+                                };
+                                
+                                fc.features.push(polygonFeature);
+                                
+                                // Add center point with icon
+                                const centroid = this.calculatePolygonCentroid(coordinates);
+                                const centerFeature = {
+                                    id: `${polygonId}-center`,
+                                    type: 'Feature' as const,
+                                    properties: {
+                                        callsign: alert.info.headline || 'CAP Alert',
+                                        type: 'a-f-X-i',
+                                        time: new Date(alert.sent).toISOString(),
+                                        start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
+                                        stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
+                                        icon: this.getEventIcon(alert.info.event),
+                                        metadata: {
+                                            ...polygonFeature.properties.metadata,
+                                            isCenter: true
+                                        },
+                                        remarks: polygonFeature.properties.remarks,
+                                        ...(alert.info.web ? {
+                                            links: [{
+                                                uid: `${polygonId}-center`,
+                                                relation: 'r-u',
+                                                mime: 'text/html',
+                                                url: alert.info.web,
+                                                remarks: 'CAP Alert Details'
+                                            }]
+                                        } : {}),
+                                        archived: false
+                                    },
+                                    geometry: {
+                                        type: 'Point' as const,
+                                        coordinates: centroid
+                                    }
+                                };
+                                fc.features.push(centerFeature);
+                            }
                         }
+                        continue; // Skip the rest of the processing for this alert
                     } catch (error) {
                         console.warn(`Invalid polygon data for alert ${alert.identifier}:`, error instanceof Error ? error.message : 'Unknown error');
                     }
@@ -523,6 +675,7 @@ export default class Task extends ETL {
                     };
                 }
 
+                // Handle circle or point geometry
                 const baseStyle = alert.info.colorCode ? {
                     stroke: alert.info.colorCode,
                     'stroke-opacity': 0.5019607843137255,
@@ -541,9 +694,7 @@ export default class Task extends ETL {
                         time: new Date(alert.sent).toISOString(),
                         start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
                         stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
-                        ...(geometry.type === 'Point' ? {
-                            icon: this.getEventIcon(alert.info.event)
-                        } : {}),
+                        icon: this.getEventIcon(alert.info.event),
                         metadata: {
                             sender: alert.sender,
                             sent: alert.sent,
@@ -574,8 +725,10 @@ export default class Task extends ETL {
                             'Severity: ' + (alert.info.severity || 'Unknown'),
                             'Certainty: ' + (alert.info.certainty || 'Unknown'),
                             'Response: ' + (alert.info.responseType || 'Unknown'),
-
+                            ...(alert.info.onset ? ['Onset: ' + new Date(alert.info.onset).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' }) + ' NZT'] : []),
+                            ...(alert.info.expires ? ['Expires: ' + new Date(alert.info.expires).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' }) + ' NZT'] : []),
                             ...(alert.signature ? [
+                                '',
                                 'Digital Signature',
                                 'Name: ' + (alert.signature.subject || 'Unknown'),
                                 'Issuer: ' + (alert.signature.issuer || 'Unknown'),
@@ -599,43 +752,6 @@ export default class Task extends ETL {
                 };
 
                 fc.features.push(feature);
-
-                // Add center point with icon for polygons
-                if (geometry.type === 'Polygon') {
-                    const centroid = this.calculatePolygonCentroid(geometry.coordinates);
-                    const centerFeature = {
-                        id: `${alert.identifier}-center`,
-                        type: 'Feature' as const,
-                        properties: {
-                            callsign: alert.info.headline || 'CAP Alert',
-                            type: 'a-f-X-i',
-                            time: new Date(alert.sent).toISOString(),
-                            start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
-                            stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
-                            icon: this.getEventIcon(alert.info.event),
-                            metadata: {
-                                ...feature.properties.metadata,
-                                isCenter: true
-                            },
-                            remarks: feature.properties.remarks,
-                            ...(alert.info.web ? {
-                                links: [{
-                                    uid: `${alert.identifier}-center`,
-                                    relation: 'r-u',
-                                    mime: 'text/html',
-                                    url: alert.info.web,
-                                    remarks: 'CAP Alert Details'
-                                }]
-                            } : {}),
-                            archived: false
-                        },
-                        geometry: {
-                            type: 'Point' as const,
-                            coordinates: centroid
-                        }
-                    };
-                    fc.features.push(centerFeature);
-                }
             } catch (error) {
                 console.error(`Error processing CAP alert ${alertUrl}:`, error);
             }
