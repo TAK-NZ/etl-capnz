@@ -47,7 +47,7 @@ interface CAPAlert {
         web?: string;
         area: {
             areaDesc: string;
-            polygon?: string;
+            polygon?: string | string[];
             circle?: string;
         };
         colorCode?: string;
@@ -546,8 +546,11 @@ export default class Task extends ETL {
                         // Handle both single polygon string and array of polygon strings
                         const polygons = Array.isArray(alert.info.area.polygon) ? alert.info.area.polygon : [alert.info.area.polygon];
                         
+                        console.log(`Processing ${polygons.length} polygon(s) for alert ${alert.identifier}`);
+                        
                         // Process each polygon separately
                         for (let i = 0; i < polygons.length; i++) {
+                            console.log(`Processing polygon ${i + 1}/${polygons.length}: ${polygons[i].substring(0, 100)}...`);
                             const coordinates = this.parsePolygonString(polygons[i]);
                             
                             if (coordinates[0].length >= 4) {
