@@ -122,26 +122,54 @@ export default class Task extends ETL {
         'snow': 'Snow'
     };
 
-    private static readonly ICON_PREFIX = 'de450cbf-2ffc-47fb-bd2b-ba2db89b035e:Public Alert/';
-    private static readonly DEFAULT_ICON = 'Emergency-Action-Notification-National-Warning.png';
+    private static readonly ICON_PREFIX = 'bb4df0a6-ca8d-4ba8-bb9e-3deb97ff015e:';
+    private static readonly DEFAULT_ICON = 'Incidents/INC.38.NaturalDisaster3.InformationOnly.png';
     private static readonly ICON_MAP: Record<string, string> = {
-        'snow': 'Blizzard-Warning.png',
-        'snowfall': 'Winter-Storm-Warning.png',
-        'rain': 'Flood-Warning.png',
-        'rainfall': 'Flash-Flood-Warning.png',
-        'wind': 'High-Wind-Warning.png',
-        'storm': 'Severe-Weather-Statement.png',
-        'thunderstorm': 'Severe-Thunderstorm-Warning.png',
-        'tornado': 'Tornado-Warning.png',
-        'tropCyclone': 'Hurricane-Warning.png',
-        'tropStorm': 'Tropical-Storm-Warning.png',
-        'flood': 'Flood-Warning.png',
-        'flashFlood': 'Flash-Flood-Warning.png',
-        'earthquake': 'Earthquake-Warning.png',
-        'tsunami': 'Tsunami-Warning.png',
-        'marine': 'Special-Marine-Warning.png',
-        'fire': 'Fire-Warning.png',
-        'fireWeather': 'Fire-Warning.png'
+        'snow': 'NaturalHazards/NH.07.Snow.png',
+        'snowfall': 'NaturalHazards/NH.07.Snow.png',
+        'rain': 'NaturalHazards/NH.05.HeavyRain.png',
+        'rainfall': 'NaturalHazards/NH.05.HeavyRain.png',
+        'wind': 'NaturalHazards/NH.04.StrongWind.png',
+        'storm': 'NaturalHazards/NH.06.ElectricalStorm.png',
+        'thunderstorm': 'NaturalHazards/NH.06.ElectricalStorm.png',
+        'tornado': 'NaturalHazards/NH.16.Tornado.png',
+        'tropCyclone': 'NaturalHazards/NH.09.TropicalCyclone.png',
+        'tropStorm': 'NaturalHazards/NH.09.TropicalCyclone.png',
+        'flood': 'NaturalHazards/NH.01.Flood.png',
+        'flashFlood': 'NaturalHazards/NH.01.Flood.png',
+        'earthquake': 'NaturalHazards/NH.24.Earthquake.png',
+        'tsunami': 'NaturalHazards/NH.03.Tsunami.png',
+        'marine': 'Incidents/INC.24.Marine.png',
+        'fire': 'Incidents/INC.35.Fire.png',
+        'fireWeather': 'Incidents/INC.37.Fire.Vegetation.png',
+        'landslide': 'NaturalHazards/NH.18.Landslide.png',
+        'stormSurge': 'NaturalHazards/NH.02.StormSurge.png',
+        'ice': 'NaturalHazards/NH.08.Ice.png',
+        'drought': 'NaturalHazards/NH.22.Drought.png',
+        'biosecurity': 'NaturalHazards/NH.23.Biosecurity.png',
+        'hail': 'NaturalHazards/NH.06.ElectricalStorm.png',
+        'winterStorm': 'NaturalHazards/NH.07.Snow.png',
+        'weather': 'Incidents/INC.38.NaturalDisaster1.Urgent.png',
+        'temperature': 'Incidents/INC.38.NaturalDisaster1.Urgent.png',
+        'coldOutbreak': 'NaturalHazards/NH.08.Ice.png',
+        'heatWave': 'Incidents/INC.38.NaturalDisaster1.Urgent.png',
+        'frost': 'NaturalHazards/NH.08.Ice.png',
+        'windChill': 'NaturalHazards/NH.08.Ice.png',
+        'avLightning': 'NaturalHazards/NH.06.ElectricalStorm.png',
+        'avThunder': 'NaturalHazards/NH.06.ElectricalStorm.png',
+        'highWater': 'NaturalHazards/NH.01.Flood.png',
+        'riverFlood': 'NaturalHazards/NH.01.Flood.png',
+        'landTsunami': 'NaturalHazards/NH.03.Tsunami.png',
+        'beachTsunami': 'NaturalHazards/NH.03.Tsunami.png',
+        'galeWind': 'NaturalHazards/NH.04.StrongWind.png',
+        'hurricFrcWnd': 'NaturalHazards/NH.04.StrongWind.png',
+        'iceberg': 'Incidents/INC.24.Marine.png',
+        'largeSurf': 'Incidents/INC.24.Marine.png',
+        'largeSwell': 'Incidents/INC.24.Marine.png',
+        'squall': 'NaturalHazards/NH.04.StrongWind.png',
+        'stormFrcWind': 'NaturalHazards/NH.04.StrongWind.png',
+        'strongWind': 'NaturalHazards/NH.04.StrongWind.png',
+        'waterspout': 'NaturalHazards/NH.16.Tornado.png'
     };
 
     private static readonly CERT_DEFAULTS = {
@@ -622,10 +650,10 @@ export default class Task extends ETL {
                                         } : {}),
                                         ...(alert.info.colorCode ? {
                                             stroke: alert.info.colorCode,
-                                            'stroke-opacity': 0.5019607843137255,
+                                            'stroke-opacity': 0.5,
                                             'stroke-width': 3,
                                             'stroke-style': 'solid',
-                                            'fill-opacity': 0.5019607843137255,
+                                            'fill-opacity': 0.4,
                                             fill: alert.info.colorCode
                                         } : {}),
                                         archived: false
