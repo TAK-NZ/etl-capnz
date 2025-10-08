@@ -186,7 +186,13 @@ export default class Task extends ETL {
         return Task.EVENT_MAP[eventCode] || eventCode || 'Unknown';
     }
 
-    private getEventIcon(eventType: string): string {
+    private getEventIcon(eventType: string, category?: string): string {
+        if (category === 'Health') {
+            return `${Task.ICON_PREFIX}Incidents/INC.60.GHS08.HealthHazard.png`;
+        }
+        if (category === 'Fire') {
+            return `${Task.ICON_PREFIX}Incidents/INC.35.Fire.png`;
+        }
         const iconFile = Task.ICON_MAP[eventType] || Task.DEFAULT_ICON;
         return `${Task.ICON_PREFIX}${iconFile}`;
     }
@@ -676,7 +682,7 @@ export default class Task extends ETL {
                                         time: new Date(alert.sent).toISOString(),
                                         start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
                                         stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
-                                        icon: this.getEventIcon(alert.info.event),
+                                        icon: this.getEventIcon(alert.info.event, alert.info.category),
                                         metadata: {
                                             ...polygonFeature.properties.metadata,
                                             isCenter: true
@@ -742,7 +748,7 @@ export default class Task extends ETL {
                         time: new Date(alert.sent).toISOString(),
                         start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
                         stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
-                        icon: this.getEventIcon(alert.info.event),
+                        icon: this.getEventIcon(alert.info.event, alert.info.category),
                         metadata: {
                             sender: alert.sender,
                             sent: alert.sent,
