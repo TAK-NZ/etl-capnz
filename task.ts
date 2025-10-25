@@ -1,6 +1,6 @@
 
-import { Static, Type, TSchema } from '@sinclair/typebox';
-import ETL, { Event, SchemaType, handler as internal, local, DataFlowType, InvocationType, InputFeatureCollection } from '@tak-ps/etl';
+import { Type, TSchema } from '@sinclair/typebox';
+import ETL, { Event, SchemaType, handler as internal, local, DataFlowType, InvocationType } from '@tak-ps/etl';
 import { XMLParser } from 'fast-xml-parser';
 import { createHash } from 'crypto';
 
@@ -556,9 +556,14 @@ export default class Task extends ETL {
         const alertUrls = await this.parseFeed(feedText);
         console.log(`Found ${alertUrls.length} CAP alerts in feed`);
 
-        const fc: Static<typeof InputFeatureCollection> = {
-            type: 'FeatureCollection',
-            features: []
+        const fc = {
+            type: 'FeatureCollection' as const,
+            features: [] as Array<{
+                id: string;
+                type: 'Feature';
+                properties: Record<string, unknown>;
+                geometry: SupportedGeometry;
+            }>
         };
 
         // Fetch and process each CAP alert
