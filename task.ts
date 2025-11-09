@@ -193,7 +193,44 @@ export default class Task extends ETL {
         if (category === 'Fire') {
             return `${Task.ICON_PREFIX}Incidents/INC.35.Fire.png`;
         }
-        const iconFile = Task.ICON_MAP[eventType] || Task.DEFAULT_ICON;
+        
+        // Handle empty or undefined eventType
+        if (!eventType || typeof eventType !== 'string') {
+            const iconFile = Task.DEFAULT_ICON;
+            return `${Task.ICON_PREFIX}${iconFile}`;
+        }
+        
+        const normalized = eventType.toLowerCase().replace(/[\s-]+/g, '');
+        
+        // Pattern matching for event types
+        const patterns: Record<string, string> = {
+            'thunderstorm|thunder': 'thunderstorm',
+            'flashflood': 'flashFlood',
+            'heavyrain|rainfall': 'rainfall',
+            'strongwind|galewind|stormwind': 'wind',
+            'winterstorm': 'winterStorm',
+            'stormsurge': 'stormSurge',
+            'tropicalcyclone': 'tropCyclone',
+            'tropicalstorm': 'tropStorm',
+            'earthquake': 'earthquake',
+            'tsunami': 'tsunami',
+            'tornado': 'tornado',
+            'flood': 'flood',
+            'snow|snowfall': 'snow',
+            'hail': 'hail',
+            'marine': 'marine',
+            'waterspout': 'waterspout'
+        };
+        
+        for (const [pattern, key] of Object.entries(patterns)) {
+            if (pattern.split('|').some(p => normalized.includes(p))) {
+                const iconFile = Task.ICON_MAP[key] || Task.DEFAULT_ICON;
+                return `${Task.ICON_PREFIX}${iconFile}`;
+            }
+        }
+        
+        // Try direct lookup with normalized event
+        const iconFile = Task.ICON_MAP[normalized] || Task.ICON_MAP[eventType.toLowerCase()] || Task.DEFAULT_ICON;
         return `${Task.ICON_PREFIX}${iconFile}`;
     }
 
