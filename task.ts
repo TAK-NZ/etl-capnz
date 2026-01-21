@@ -186,7 +186,7 @@ export default class Task extends ETL {
         return Task.EVENT_MAP[eventCode] || eventCode || 'Unknown';
     }
 
-    private getEventIcon(eventType: string, category?: string, severity?: string): string {
+    private getEventIcon(eventType: string, category?: string, severity?: string, headline?: string): string {
         if (category === 'Health') {
             return `${Task.ICON_PREFIX}Incidents/INC.60.GHS08.HealthHazard.png`;
         }
@@ -201,6 +201,7 @@ export default class Task extends ETL {
         }
         
         const normalized = eventType.toLowerCase().replace(/[\s-]+/g, '');
+        const headlineNormalized = headline ? headline.toLowerCase().replace(/[\s-]+/g, '') : '';
         
         // Pattern matching for event types
         const patterns: Record<string, string> = {
@@ -223,7 +224,7 @@ export default class Task extends ETL {
         };
         
         for (const [pattern, key] of Object.entries(patterns)) {
-            if (pattern.split('|').some(p => normalized.includes(p))) {
+            if (pattern.split('|').some(p => normalized.includes(p) || headlineNormalized.includes(p))) {
                 const iconFile = Task.ICON_MAP[key] || Task.DEFAULT_ICON;
                 return `${Task.ICON_PREFIX}${iconFile}`;
             }
@@ -741,7 +742,7 @@ export default class Task extends ETL {
                                         time: new Date(alert.sent).toISOString(),
                                         start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
                                         stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
-                                        icon: this.getEventIcon(alert.info.event, alert.info.category, alert.info.severity),
+                                        icon: this.getEventIcon(alert.info.event, alert.info.category, alert.info.severity, alert.info.headline),
                                         metadata: {
                                             ...polygonFeature.properties.metadata,
                                             isCenter: true
@@ -807,7 +808,7 @@ export default class Task extends ETL {
                         time: new Date(alert.sent).toISOString(),
                         start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
                         stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
-                        icon: this.getEventIcon(alert.info.event, alert.info.category, alert.info.severity),
+                        icon: this.getEventIcon(alert.info.event, alert.info.category, alert.info.severity, alert.info.headline),
                         metadata: {
                             sender: alert.sender,
                             sent: alert.sent,
