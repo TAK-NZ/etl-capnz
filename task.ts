@@ -123,7 +123,7 @@ export default class Task extends ETL {
     };
 
     private static readonly ICON_PREFIX = 'bb4df0a6-ca8d-4ba8-bb9e-3deb97ff015e:';
-    private static readonly DEFAULT_ICON = 'Incidents/INC.38.NaturalDisaster3.InformationOnly.png';
+    private static readonly DEFAULT_ICON = 'Incidents/INC.01.IndicentGeneric.Yellow.png';
     private static readonly ICON_MAP: Record<string, string> = {
         'snow': 'NaturalHazards/NH.07.Snow.png',
         'snowfall': 'NaturalHazards/NH.07.Snow.png',
@@ -186,7 +186,7 @@ export default class Task extends ETL {
         return Task.EVENT_MAP[eventCode] || eventCode || 'Unknown';
     }
 
-    private getEventIcon(eventType: string, category?: string): string {
+    private getEventIcon(eventType: string, category?: string, severity?: string): string {
         if (category === 'Health') {
             return `${Task.ICON_PREFIX}Incidents/INC.60.GHS08.HealthHazard.png`;
         }
@@ -230,8 +230,25 @@ export default class Task extends ETL {
         }
         
         // Try direct lookup with normalized event
-        const iconFile = Task.ICON_MAP[normalized] || Task.ICON_MAP[eventType.toLowerCase()] || Task.DEFAULT_ICON;
-        return `${Task.ICON_PREFIX}${iconFile}`;
+        const directLookup = Task.ICON_MAP[normalized] || Task.ICON_MAP[eventType.toLowerCase()];
+        if (directLookup) {
+            return `${Task.ICON_PREFIX}${directLookup}`;
+        }
+        
+        // Fallback to severity-based icons for Met/Geo categories
+        if (category === 'Met' || category === 'Geo') {
+            if (severity === 'Severe' || severity === 'Extreme') {
+                return `${Task.ICON_PREFIX}Incidents/INC.38.NaturalDisaster1.Urgent.png`;
+            }
+            if (severity === 'Moderate') {
+                return `${Task.ICON_PREFIX}Incidents/INC.39.NaturalDisaster2.NonUrgent.png`;
+            }
+            if (severity === 'Minor') {
+                return `${Task.ICON_PREFIX}Incidents/INC.40.NaturalDisaster3.InformationOnly.png`;
+            }
+        }
+        
+        return `${Task.ICON_PREFIX}${Task.DEFAULT_ICON}`;
     }
 
     private parsePolygonString(polygonStr: string): number[][][] {
@@ -724,7 +741,7 @@ export default class Task extends ETL {
                                         time: new Date(alert.sent).toISOString(),
                                         start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
                                         stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
-                                        icon: this.getEventIcon(alert.info.event, alert.info.category),
+                                        icon: this.getEventIcon(alert.info.event, alert.info.category, alert.info.severity),
                                         metadata: {
                                             ...polygonFeature.properties.metadata,
                                             isCenter: true
@@ -790,7 +807,7 @@ export default class Task extends ETL {
                         time: new Date(alert.sent).toISOString(),
                         start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
                         stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
-                        icon: this.getEventIcon(alert.info.event, alert.info.category),
+                        icon: this.getEventIcon(alert.info.event, alert.info.category, alert.info.severity),
                         metadata: {
                             sender: alert.sender,
                             sent: alert.sent,
