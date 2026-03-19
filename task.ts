@@ -632,6 +632,11 @@ export default class Task extends ETL {
                     continue;
                 }
 
+                if (alert.info.expires && new Date(alert.info.expires) < new Date()) {
+                    console.log(`Skipping expired alert ${alert.identifier} (expired: ${alert.info.expires})`);
+                    continue;
+                }
+
                 // Create feature from CAP alert
                 let geometry: SupportedGeometry | null = null;
                 
