@@ -403,6 +403,7 @@ export default class Task extends ETL {
                 clearTimeout(timeoutId);
             }
         }
+        throw new Error('fetchWithRetry: all retry attempts exhausted');
     }
 
     private async parseXML(xmlText: string): Promise<CAPAlert | null> {
