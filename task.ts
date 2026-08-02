@@ -700,14 +700,17 @@ export default class Task extends ETL {
                     continue;
                 }
 
-                // sent/onset/expires: raw UTC ISO strings unmodified, plus NZ
-                // local human-formatted equivalents (relative time computed
-                // against `now`, the time this alert was processed).
-                const sentUTC = alert.sent;
+                // CAP timestamps arrive as local NZ time with a numeric offset
+                // (e.g. 2026-08-02T20:35:27+12:00), not UTC. Convert to a real
+                // UTC ISO 8601 string (Z designator) for the `<name>UTC`
+                // fields, and derive the NZ local human-formatted equivalent
+                // from the same Date (relative time computed against `now`,
+                // the time this alert was processed).
+                const sentUTC = new Date(alert.sent).toISOString();
                 const sentLocal = formatNZLocalTime(alert.sent, now);
-                const onsetUTC = alert.info.onset || undefined;
+                const onsetUTC = alert.info.onset ? new Date(alert.info.onset).toISOString() : undefined;
                 const onsetLocal = alert.info.onset ? formatNZLocalTime(alert.info.onset, now) : undefined;
-                const expiresUTC = alert.info.expires || undefined;
+                const expiresUTC = alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined;
                 const expiresLocal = alert.info.expires ? formatNZLocalTime(alert.info.expires, now) : undefined;
 
                 // Create feature from CAP alert
