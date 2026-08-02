@@ -4,6 +4,66 @@ import ETL, { Event, SchemaType, handler as internal, local, DataFlowType, Invoc
 import { XMLParser } from 'fast-xml-parser';
 import { createHash } from 'crypto';
 
+// NZ timezone formatters. `timeZone: 'Pacific/Auckland'` handles the NZST/NZDT
+// daylight saving transition automatically - do not hardcode a +12/+13 offset.
+const NZ_DATE_FORMAT = new Intl.DateTimeFormat('en-NZ', {
+    timeZone: 'Pacific/Auckland',
+    day: '2-digit', month: '2-digit', year: 'numeric'
+});
+const NZ_TIME_FORMAT = new Intl.DateTimeFormat('en-NZ', {
+    timeZone: 'Pacific/Auckland',
+    hour: '2-digit', minute: '2-digit', hour12: false
+});
+const NZ_TZ_NAME_FORMAT = new Intl.DateTimeFormat('en-NZ', {
+    timeZone: 'Pacific/Auckland',
+    timeZoneName: 'short'
+});
+
+/**
+ * Floored relative time between `target` and `reference`, e.g. "3 hours ago"
+ * or "in 2 days". Uses floor (not round) so an event doesn't jump to the next
+ * unit a few seconds after crossing the boundary.
+ */
+function formatRelativeTime(target: Date, reference: Date): string {
+    const diffMs = reference.getTime() - target.getTime();
+    const isPast = diffMs >= 0;
+    const absMs = Math.abs(diffMs);
+
+    const minutes = Math.floor(absMs / (60 * 1000));
+    const hours = Math.floor(absMs / (60 * 60 * 1000));
+    const days = Math.floor(absMs / (24 * 60 * 60 * 1000));
+
+    let value: number;
+    let unit: string;
+    if (hours < 1) {
+        value = minutes;
+        unit = 'minute';
+    } else if (hours < 24) {
+        value = hours;
+        unit = 'hour';
+    } else {
+        value = days;
+        unit = 'day';
+    }
+
+    const label = `${value} ${unit}${value === 1 ? '' : 's'}`;
+    return isPast ? `${label} ago` : `in ${label}`;
+}
+
+/**
+ * Formats an ISO 8601 UTC timestamp as NZ local time, human formatted:
+ * `DD/MM/YYYY, HH:mm <NZST|NZDT> (<relative time>)`
+ */
+function formatNZLocalTime(isoString: string, reference: Date): string {
+    const date = new Date(isoString);
+    const datePart = NZ_DATE_FORMAT.format(date);
+    const timePart = NZ_TIME_FORMAT.format(date);
+    const tzPart = NZ_TZ_NAME_FORMAT.formatToParts(date)
+        .find((part) => part.type === 'timeZoneName')?.value ?? '';
+    const relative = formatRelativeTime(date, reference);
+    return `${datePart}, ${timePart} ${tzPart} (${relative})`;
+}
+
 const Environment = Type.Object({
     RSS_URL: Type.String({
         description: 'CAP-NZ RSS or Atom feed URL'
@@ -633,10 +693,22 @@ export default class Task extends ETL {
                     continue;
                 }
 
-                if (alert.info.expires && new Date(alert.info.expires) < new Date()) {
+                const now = new Date();
+
+                if (alert.info.expires && new Date(alert.info.expires) < now) {
                     console.log(`Skipping expired alert ${alert.identifier} (expired: ${alert.info.expires})`);
                     continue;
                 }
+
+                // sent/onset/expires: raw UTC ISO strings unmodified, plus NZ
+                // local human-formatted equivalents (relative time computed
+                // against `now`, the time this alert was processed).
+                const sentUTC = alert.sent;
+                const sentLocal = formatNZLocalTime(alert.sent, now);
+                const onsetUTC = alert.info.onset || undefined;
+                const onsetLocal = alert.info.onset ? formatNZLocalTime(alert.info.onset, now) : undefined;
+                const expiresUTC = alert.info.expires || undefined;
+                const expiresLocal = alert.info.expires ? formatNZLocalTime(alert.info.expires, now) : undefined;
 
                 // Create feature from CAP alert
                 let geometry: SupportedGeometry | null = null;
@@ -672,7 +744,8 @@ export default class Task extends ETL {
                                         stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
                                         metadata: {
                                             sender: alert.sender,
-                                            sent: alert.sent,
+                                            sentUTC,
+                                            sentLocal,
                                             status: alert.status,
                                             msgType: alert.msgType,
                                             scope: alert.scope,
@@ -686,8 +759,8 @@ export default class Task extends ETL {
                                             description: alert.info.description,
                                             instruction: alert.info.instruction,
                                             responseType: alert.info.responseType,
-                                            onset: alert.info.onset,
-                                            expires: alert.info.expires,
+                                            ...(onsetUTC ? { onsetUTC, onsetLocal } : {}),
+                                            ...(expiresUTC ? { expiresUTC, expiresLocal } : {}),
                                             web: alert.info.web,
                                             areaDesc: alert.info.area.areaDesc
                                         },
@@ -700,8 +773,10 @@ export default class Task extends ETL {
                                             'Severity: ' + (alert.info.severity || 'Unknown'),
                                             'Certainty: ' + (alert.info.certainty || 'Unknown'),
                                             'Response: ' + (alert.info.responseType || 'Unknown'),
-                                            ...(alert.info.onset ? ['Onset: ' + new Date(alert.info.onset).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' }) + ' NZT'] : []),
-                                            ...(alert.info.expires ? ['Expires: ' + new Date(alert.info.expires).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' }) + ' NZT'] : []),
+                                            'Sent (UTC): ' + sentUTC,
+                                            'Sent (NZ): ' + sentLocal,
+                                            ...(onsetUTC ? ['Onset (UTC): ' + onsetUTC, 'Onset (NZ): ' + onsetLocal] : []),
+                                            ...(expiresUTC ? ['Expires (UTC): ' + expiresUTC, 'Expires (NZ): ' + expiresLocal] : []),
                                             ...(alert.signature ? [
                                                 '',
                                                 'Digital Signature',
@@ -817,7 +892,8 @@ export default class Task extends ETL {
                         icon: this.getEventIcon(alert.info.event, alert.info.category, alert.info.severity, alert.info.headline),
                         metadata: {
                             sender: alert.sender,
-                            sent: alert.sent,
+                            sentUTC,
+                            sentLocal,
                             status: alert.status,
                             msgType: alert.msgType,
                             scope: alert.scope,
@@ -831,8 +907,8 @@ export default class Task extends ETL {
                             description: alert.info.description,
                             instruction: alert.info.instruction,
                             responseType: alert.info.responseType,
-                            onset: alert.info.onset,
-                            expires: alert.info.expires,
+                            ...(onsetUTC ? { onsetUTC, onsetLocal } : {}),
+                            ...(expiresUTC ? { expiresUTC, expiresLocal } : {}),
                             web: alert.info.web,
                             areaDesc: alert.info.area.areaDesc
                         },
@@ -845,8 +921,10 @@ export default class Task extends ETL {
                             'Severity: ' + (alert.info.severity || 'Unknown'),
                             'Certainty: ' + (alert.info.certainty || 'Unknown'),
                             'Response: ' + (alert.info.responseType || 'Unknown'),
-                            ...(alert.info.onset ? ['Onset: ' + new Date(alert.info.onset).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' }) + ' NZT'] : []),
-                            ...(alert.info.expires ? ['Expires: ' + new Date(alert.info.expires).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' }) + ' NZT'] : []),
+                            'Sent (UTC): ' + sentUTC,
+                            'Sent (NZ): ' + sentLocal,
+                            ...(onsetUTC ? ['Onset (UTC): ' + onsetUTC, 'Onset (NZ): ' + onsetLocal] : []),
+                            ...(expiresUTC ? ['Expires (UTC): ' + expiresUTC, 'Expires (NZ): ' + expiresLocal] : []),
                             ...(alert.signature ? [
                                 '',
                                 'Digital Signature',
