@@ -1,0 +1,27 @@
+{
+    "version": "1.0",
+    "name": "CAP-NZ Alerts",
+    "description": "Ingests Common Alerting Protocol (CAP) alerts from a CAP-NZ RSS/Atom feed (e.g. MetService) and posts them to the map as polygon, circle, or point features with associated metadata.",
+    "compute": {
+        "memory": 1024,
+        "timeout": 120
+    },
+    "permissions": [
+        {
+            "resource": "feature:*",
+            "required": true,
+            "description": "Submits CAP alert features (polygons, circles, points) to CloudTAK"
+        }
+    ],
+    "invocations": {
+        "incoming": {
+            "schedule": {
+                "description": "Polls the configured CAP-NZ RSS/Atom feed for new or updated alerts on a schedule.",
+                "default": {
+                    "enabled": true,
+                    "schedule": "rate(1 minute)"
+                }
+            }
+        }
+    }
+}

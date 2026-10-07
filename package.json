@@ -23,7 +23,7 @@
     },
     "dependencies": {
         "@sinclair/typebox": "^0.34.52",
-        "@tak-ps/etl": "^10.9.0",
+        "@tak-ps/etl": "^10.22.1",
         "fast-xml-parser": "^5.10.1"
     }
 }
