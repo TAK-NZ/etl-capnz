@@ -17,6 +17,8 @@
 - :rocket: Switch to `Task.init()` for local-dev `ETL_TOKEN` auto-generation (no behavior change in Lambda)
 - :arrow_up: Bump `engines` Node version requirement to 24, matching the Dockerfile runtime and `@tak-ps/etl`'s own requirement (CI's existing Node 22 is an intentional, noted divergence - not addressed here)
 - :arrow_up: Bump `@tak-ps/etl` 10.9.0 → 10.22.1 (needed for `StaticCapabilitiesSchema`) and update `eslint`, `fast-xml-parser`, `typescript-eslint` to latest within existing semver ranges; resolve all npm audit advisories. `typescript` stays pinned to `^6.0.3` until `typescript-eslint` supports 7.x (its peer dependency currently caps at `<6.1.0`)
+- :arrow_up: Update GitHub Actions to releases that run on Node.js 24, clearing the Node.js 20 deprecation warnings: `actions/checkout` v7, `actions/setup-node` v7, `aws-actions/configure-aws-credentials` v6 and `docker/setup-buildx-action` v4. `aws-actions/amazon-ecr-login` v2 already runs on Node.js 24. Not yet run in CI on these versions
+- :rocket: Pin the workflow runners to `ubuntu-24.04` instead of `ubuntu-latest`, so the `ubuntu-latest` migration to Ubuntu 26 (starting October 19, 2026) does not change the build environment unannounced
 
 ### v1.3.8
 
