@@ -64,6 +64,37 @@ function formatNZLocalTime(isoString: string, reference: Date): string {
     return `${datePart}, ${timePart} ${tzPart} (${relative})`;
 }
 
+/**
+ * Properties that make a polygon marker invisible in ATAK.
+ *
+ * CloudTAK (node-cot >= 14.58.0) turns a Polygon with a marker `type` into a
+ * marker CoT with a `<shape><polyline>`. ATAK removes the polygon together
+ * with that marker once `stale` passes, unlike a `u-d-f` drawing, which never
+ * expires. The marker has no icon, so ATAK would draw an unknown-type "?" on
+ * it: alpha 0 (`<color argb>`) hides that.
+ *
+ * Do NOT give the polygon feature an `icon`: a valid `usericon` makes ATAK move
+ * the marker to another map group, which deletes the polygon it owns. The
+ * icon belongs on the separate `-center` point.
+ */
+export const HIDDEN_MARKER_PROPERTIES = {
+    'marker-color': '#808080',
+    'marker-opacity': 0
+} as const;
+
+/** Fallback lifetime for an alert that carries no `expires` */
+export const NO_EXPIRY_STALE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * CoT `stale` for an alert's polygon and center point. An alert without
+ * `expires` would otherwise get node-cot's 20 second default, and now that the
+ * polygon expires with its marker it would vanish almost immediately
+ */
+export function alertStale(expires: string | undefined, sent: string): string {
+    if (expires) return new Date(expires).toISOString();
+    return new Date(new Date(sent).getTime() + NO_EXPIRY_STALE_MS).toISOString();
+}
+
 const Environment = Type.Object({
     RSS_URL: Type.String({
         description: 'CAP-NZ RSS or Atom feed URL'
@@ -742,9 +773,10 @@ export default class Task extends ETL {
                                     properties: {
                                         callsign: alert.info.headline || 'CAP Alert',
                                         type: 'a-f-X-i',
+                                        ...HIDDEN_MARKER_PROPERTIES,
                                         time: new Date(alert.sent).toISOString(),
                                         start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
-                                        stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
+                                        stale: alertStale(alert.info.expires, alert.sent),
                                         metadata: {
                                             sender: alert.sender,
                                             sentUTC,
@@ -827,7 +859,7 @@ export default class Task extends ETL {
                                         type: 'a-f-X-i',
                                         time: new Date(alert.sent).toISOString(),
                                         start: alert.info.onset ? new Date(alert.info.onset).toISOString() : new Date(alert.sent).toISOString(),
-                                        stale: alert.info.expires ? new Date(alert.info.expires).toISOString() : undefined,
+                                        stale: alertStale(alert.info.expires, alert.sent),
                                         icon: this.getEventIcon(alert.info.event, alert.info.category, alert.info.severity, alert.info.headline),
                                         metadata: {
                                             ...polygonFeature.properties.metadata,
