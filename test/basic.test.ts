@@ -51,3 +51,46 @@ test('Outgoing flow is not provided', async () => {
 
     assert.deepEqual(schema.properties, {});
 });
+
+const { HIDDEN_MARKER_PROPERTIES, NO_EXPIRY_STALE_MS, alertStale } = await import('../task.js');
+const { CoTParser } = await import('@tak-ps/node-cot');
+
+test('alertStale uses expires when present', () => {
+    assert.equal(alertStale('2030-01-02T00:00:00+13:00', '2030-01-01T00:00:00Z'), '2030-01-01T11:00:00.000Z');
+});
+
+test('alertStale falls back to sent + 24h without expires', () => {
+    assert.equal(NO_EXPIRY_STALE_MS, 24 * 60 * 60 * 1000);
+    assert.equal(alertStale(undefined, '2030-01-01T00:00:00Z'), '2030-01-02T00:00:00.000Z');
+});
+
+test('Polygon marker converts to an invisible, expiring marker with a polyline', async () => {
+    const stale = alertStale(undefined, '2030-01-01T00:00:00Z');
+    const cot = await CoTParser.from_geojson({
+        id: 'alert-1',
+        type: 'Feature',
+        properties: {
+            callsign: 'CAP Alert',
+            type: 'a-f-X-i',
+            stale,
+            ...HIDDEN_MARKER_PROPERTIES,
+            stroke: '#ff0000',
+            'stroke-opacity': 0.5,
+            fill: '#ff0000',
+            'fill-opacity': 0.4
+        },
+        geometry: { type: 'Polygon', coordinates: [[[170, -43], [171, -43], [171, -44], [170, -44], [170, -43]]] }
+    } as never);
+    const event = cot.raw.event;
+
+    // A u-d-f drawing would never expire in ATAK
+    assert.equal(event._attributes.type, 'a-f-X-i');
+    assert.equal(event._attributes.stale, stale);
+    assert.ok(event.detail.shape?.polyline, 'detail.shape.polyline is set');
+
+    // A usericon makes ATAK delete the polygon; alpha 0 hides the "?" marker
+    assert.equal(event.detail.usericon, undefined);
+    const argb = Number(event.detail.color?._attributes?.argb);
+    assert.ok(Number.isFinite(argb));
+    assert.equal((argb >>> 24) & 0xff, 0);
+});

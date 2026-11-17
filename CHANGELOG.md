@@ -10,6 +10,12 @@
 
 ## Version History
 
+### v1.4.1
+- :bug: Alert polygons now expire. CloudTAK (`@tak-ps/node-cot` >= 14.58.0) converts a Polygon with a marker `type` (`a-f-X-i`) into a marker CoT with a `<shape><polyline>`, so ATAK removes the polygon together with the marker at `stale`. A `u-d-f` drawing never expires in ATAK. This already happens on CloudTAK >= 14.58.0; this release handles its two side effects
+- :bug: The polygon marker is invisible (`marker-color` with `marker-opacity: 0`, written as `<color argb>` with alpha 0), otherwise ATAK draws an unknown-type "?" on it. It must not carry an `icon`: a valid `usericon` makes ATAK move the marker to another map group, which deletes the polygon it owns. The icon stays on the separate `-center` point
+- :bug: Alerts without `expires` now get `stale` = sent + 24 h for the polygon and its center point. Without it node-cot's 20 second default applies, and the polygon, which used to persist as a `u-d-f`, would vanish almost immediately
+- :white_check_mark: Test the stale fallback and the conversion of the polygon marker through `CoTParser.from_geojson` (adds `@tak-ps/node-cot` as a devDependency)
+- :arrow_up: `npm audit fix`, `npm audit` reports 0 vulnerabilities
 ### v1.4.0
 
 - :tada: Add `capabilities.json` manifest (validated against `@tak-ps/etl`'s `StaticCapabilitiesSchema`) describing this task's permissions, compute requirements and invocation modes, embedded in the pushed image as the `com.cloudtak.capabilities` OCI annotation via `docker buildx` in CI
