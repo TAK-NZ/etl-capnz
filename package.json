@@ -2,7 +2,7 @@
     "name": "etl-capnz",
     "type": "module",
     "prviate": true,
-    "version": "1.4.1",
+    "version": "1.4.2",
     "description": "",
     "main": "index.js",
     "scripts": {
@@ -28,7 +28,7 @@
     },
     "dependencies": {
         "@sinclair/typebox": "^0.34.52",
-        "@tak-ps/etl": "^10.22.1",
+        "@tak-ps/etl": "^11.4.0",
         "fast-xml-parser": "^5.10.1"
     }
 }
