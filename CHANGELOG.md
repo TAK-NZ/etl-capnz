@@ -10,6 +10,9 @@
 
 ## Version History
 
+### v1.4.2
+- :arrow_up: Update `@tak-ps/etl` to `^11.4.0`. CloudTAK v14 requires ETLs to be on ETL-Base v11 or higher. v11 publishes Output schemas as named schemas, so this task needed no change for that, and the release also works with CloudTAK v13
+- :arrow_up: Update the other dependencies within their existing ranges, which clears the `npm audit --production` findings that the deploy workflow checks
 ### v1.4.1
 - :bug: Alert polygons now expire. CloudTAK (`@tak-ps/node-cot` >= 14.58.0) converts a Polygon with a marker `type` (`a-f-X-i`) into a marker CoT with a `<shape><polyline>`, so ATAK removes the polygon together with the marker at `stale`. A `u-d-f` drawing never expires in ATAK. This already happens on CloudTAK >= 14.58.0; this release handles its two side effects
 - :bug: The polygon marker is invisible (`marker-color` with `marker-opacity: 0`, written as `<color argb>` with alpha 0), otherwise ATAK draws an unknown-type "?" on it. It must not carry an `icon`: a valid `usericon` makes ATAK move the marker to another map group, which deletes the polygon it owns. The icon stays on the separate `-center` point
